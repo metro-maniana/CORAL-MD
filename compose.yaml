@@ -1,0 +1,125 @@
+services:
+  django:
+    build:
+      context: ./web
+      dockerfile: ./django/Dockerfile
+    expose:
+      - 8080
+    restart: "unless-stopped"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./web/
+          target: /home/mambauser/prod
+    volumes:
+      - user_uploads:/home/mambauser/prod/user_uploads:z
+      - static_volume:/home/mambauser/prod/staticfiles:z
+    environment:
+      - NPM_BIN_PATH=/home/mambauser/.nvm/versions/node/v22.19.0/bin/npm
+      - SQL_PASSWORD_FILE=/run/secrets/db_password
+      - DJANGO_SECRET_KEY_FILE=/run/secrets/django_key
+    env_file: ".env"
+    secrets:
+      - db_password
+      - django_key
+  
+  huey:
+    build:
+      context: ./web
+      dockerfile: ./huey/Dockerfile
+    command: micromamba run python manage.py run_huey --no-periodic
+    restart: "unless-stopped"
+    deploy:
+      replicas: $WORKER_COUNT
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./web/ligand_service/tasks.py
+          target: /home/mambauser/prod/ligand_service/tasks.py
+        - action: sync+restart
+          path: ./web/ligand_service/graphs.py
+          target: /home/mambauser/prod/ligand_service/graphs.py
+    user: "57439:57439"
+    environment:
+      - SQL_PASSWORD_FILE=/run/secrets/db_password
+      - DJANGO_SECRET_KEY_FILE=/run/secrets/django_key
+    volumes:
+      - user_uploads:/home/mambauser/prod/user_uploads:z
+    env_file: ".env"
+    secrets:
+      - db_password
+      - django_key
+    depends_on:
+      - redis
+      - django
+
+#  huey_periodic:
+#    build:
+#      context: ./web
+#      dockerfile: ./huey_periodic/Dockerfile
+#    command: micromamba run python manage.py run_huey
+#    restart: "unless-stopped"
+#    develop:
+#      watch:
+#        - action: sync+restart
+#          path: ./web/ligand_service/tasks.py
+#          target: /home/mambauser/prod/ligand_service/tasks.py
+#    user: "57439:57439"
+#    environment:
+#      - SQL_PASSWORD_FILE=/run/secrets/db_password
+#      - DJANGO_SECRET_KEY_FILE=/run/secrets/django_key
+#      - HUEY_PERIODIC_WORKER=True
+#    volumes:
+#      - user_uploads:/home/mambauser/prod/user_uploads:z
+#    env_file: ".env"
+#    secrets:
+#      - db_password
+#      - django_key
+#    depends_on:
+#      - redis
+#      - django
+
+  db:
+    image: postgres:17.6
+    restart: "unless-stopped"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=$SQL_USER
+      - POSTGRES_DB=$SQL_DATABASE
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+    secrets:
+      - source: db_password
+
+  redis:
+      image: "redis:alpine"
+      restart: "unless-stopped"
+      expose:
+        - 6379
+  
+  nginx:
+    build: ./nginx
+    ports:
+      - 8000:80
+    volumes:
+      - user_uploads:/user_uploads:z
+      - static_volume:/static:z
+    depends_on:
+      - django
+    restart: "unless-stopped"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./nginx/nginx.conf
+          target: /etc/nginx/conf.d/nginx.conf
+
+secrets:
+   db_password:
+     file: ./secrets/db_password.txt
+   django_key:
+     file: ./secrets/django_key.txt
+
+volumes:
+  postgres_data:
+  user_uploads:
+  static_volume:
