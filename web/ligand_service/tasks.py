@@ -6,9 +6,11 @@ import functools
 import shutil
 import pandas as pd
 import xmltodict
+import re
 
 from huey import crontab
 from huey.contrib.djhuey import periodic_task, task
+import polars as pl
 
 from django.conf import settings
 
@@ -27,6 +29,8 @@ from .graphs import (
     create_interaction_area_graph,
     create_time_resolved_map,
 )
+
+from .handle_plip import extract_plip_report
 
 LIGAND_DETECTION_THRESHOLD = 0.7
 INCHIKEY_TO_NAME_JSON_PATH = Path("./chebi/inchikey_to_name.json")
@@ -64,101 +68,6 @@ def save_file(file_handle, path_to_save_location: Path):
             destination.write(chunk)
 
 
-def extract_data_from_plip_results(
-    results_dir: Path,
-) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-    frames_data = {
-        "Frame": [],
-        "Interaction type": [],
-        "Residue chain": [],
-        "Residue name": [],
-        "Residue number": [],
-        "Ligand residue chain": [],
-        "Ligand residue name": [],
-        "Ligand residue number": [],
-    }
-    ligand_info = {
-        "frames_seen": [],
-        "name": [],
-        "ligtype": [],
-        "smiles": [],
-        "inchikey": [],
-        # "img": [],
-    }
-    logger.info("Extracting data from plip results...")
-    for dir in sorted(results_dir.iterdir(), key=lambda x: (len(str(x)), x)):
-        if not dir.is_dir():
-            continue
-        with open(dir / "report.xml") as f:
-            file_contents = f.read()
-            out = xmltodict.parse(file_contents)
-            binding_sites = out["report"]["bindingsite"]
-            # handling of instance, where there is only one binding site
-            if not isinstance(binding_sites, list):
-                binding_sites = [binding_sites]
-            for binding_site in binding_sites:
-                if binding_site["@has_interactions"] == "False":
-                    logger.info(f"Skipping binding_site: {binding_site}")
-                    continue
-                ident = binding_site["identifiers"]
-                interactions = binding_site["interactions"]
-                inchikey = ident["inchikey"]
-                if inchikey in ligand_info["inchikey"]:
-                    idx = ligand_info["inchikey"].index(inchikey)
-                    ligand_info["frames_seen"][idx] += 1
-                else:
-                    logger.info(f"Adding new ligand: {inchikey}")
-                    ligand_info["frames_seen"].append(1)
-                    ligand_info["name"].append(ident["longname"])
-                    ligand_info["ligtype"].append(ident["ligtype"])
-                    ligand_info["smiles"].append(ident["smiles"])
-                    ligand_info["inchikey"].append(inchikey)
-
-                # mol = Chem.MolFromSmiles(ident["smiles"])
-                # logger.info(f"Molecule created from SMILES")
-                # if mol is not None:
-                #     img = Draw.MolToImage(mol, size=(300, 300))
-                #     logger.info(f"Image created from mol")
-                #     buffer = BytesIO()
-                #     img.save(buffer, format="PNG")
-                #     img_str = base64.b64encode(buffer.getvalue()).decode()
-                #     inlined_image = (
-                #         f'<img src="data:image/png;base64,{img_str}">'
-                #     )
-                #     ligand_info["img"].append(inlined_image)
-                # else:
-                #     ligand_info["img"].append("")
-
-                for interaction_type in interactions:
-                    for contacts_lists in interactions[interaction_type] or []:
-                        contacts = interactions[interaction_type][contacts_lists]
-                        # handling of instance where there is only one interaction of given type,
-                        # xmltodict doesn't make a list in this case, it just provides the value
-                        if not isinstance(contacts, list):
-                            contacts = [contacts]
-                        for value in contacts:
-                            frames_data["Frame"].append(int(dir.stem[5:]))
-                            frames_data["Interaction type"].append(
-                                INTERACTION_TYPE_RENAME[interaction_type]
-                            )
-                            frames_data["Residue chain"].append(value["reschain"])
-                            frames_data["Residue number"].append(value["resnr"])
-                            frames_data["Residue name"].append(value["restype"])
-                            frames_data["Ligand residue chain"].append(
-                                value["reschain_lig"]
-                            )
-                            frames_data["Ligand residue number"].append(
-                                value["resnr_lig"]
-                            )
-                            frames_data["Ligand residue name"].append(
-                                value["restype_lig"]
-                            )
-    frame_df = pd.DataFrame(frames_data)
-    ligand_df = pd.DataFrame(ligand_info)
-    ligand_df.drop_duplicates(inplace=True)
-    return frame_df, ligand_df
-
-
 inchikey_to_name = {}
 inchikey_to_chebiID = {}
 
@@ -176,65 +85,111 @@ else:
         inchikey_to_chebiID = json.load(f)
 
 
+def extract_frame_number(directory: Path):
+    return int("".join([char for char in directory.name if char.isdigit()]))
+
+
 def analyse_simulation(
-    top_file: Path, traj_file: Path, plip_dir: Path, results_dir: Path
+    top_file: Path,
+    traj_file: Path,
+    lig_info: dict[str, tuple[str, str]],
+    plip_dir: Path,
+    results_dir: Path,
+    frame_count: int | None = None,
 ):
+    results_dir.mkdir(exist_ok=True, parents=True)
+
     run_data = {}
-    out = extract_data_from_plip_results(plip_dir)
-    if out is None:
-        return
+    plip_results_df = None
+    report_dirs = [
+        (extract_frame_number(dir), dir) for dir in plip_dir.iterdir() if dir.is_dir()
+    ]
+    for frame_number, dir in sorted(report_dirs):
+        report = dir / "report.xml"
+        frame_results_df = extract_plip_report(report)
+        frame_results_df = frame_results_df.with_columns(
+            pl.lit(frame_number).alias("frame")
+        )
+        if plip_results_df is not None:
+            plip_results_df.extend(frame_results_df)
+        else:
+            plip_results_df = frame_results_df
+    assert plip_results_df is not None
+    plip_results_df = plip_results_df.lazy().filter(
+        pl.col("lig_type") == "SMALLMOLECULE"
+    )
     shutil.rmtree(plip_dir)
-    df = out[0]
-    ligand_df = out[1]
-    dic, scores = create_translation_dict_by_blast(top_file, traj_file)
+    blast_result = create_translation_dict_by_blast(top_file, traj_file)
+    if blast_result is not None:
+        dic, scores = blast_result
+        plip_results_df = plip_results_df.with_columns(
+            pl.concat_str(["res_chain", "res_name", "res_pos"], separator=":")
+            .replace(dic, default=None)
+            .alias("aligned_numbering")
+        )
+
+    smiles_dict = {lig: info[0] for lig, info in lig_info.items()}
+    inchikey_dict = {lig: info[1] for lig, info in lig_info.items()}
+
+    plip_results_df = plip_results_df.with_columns(
+        pl.concat_str(["lig_name", "lig_pos"], separator="")
+        .replace(smiles_dict)
+        .alias("smiles"),
+        pl.concat_str(["lig_name", "lig_pos"], separator="")
+        .replace(inchikey_dict)
+        .alias("inchikey"),
+    )
+
+    print("RESULTS WRITTEN TO:", results_dir / "interactions.csv")
+    plip_results_df = plip_results_df.collect()
+    plip_results_df.write_csv(
+        file=(results_dir / "interactions.csv"),
+    )
+
     run_data["name"] = top_file.parent.name
     run_data["alignment_scores"] = scores
 
-    def get_numbering_blast(row):
-        assert dic is not None
-        key = (
-            row["Residue chain"],
-            row["Residue name"],
-            str(row["Residue name"]),
-        )
-        if key in dic:
-            return dic[key]
-
-    df["Aligned numbering"] = df.apply(get_numbering_blast, axis=1)
-    run_data["interaction_graph"] = create_interaction_area_graph(df)
-    results_dir.mkdir(exist_ok=True, parents=True)
-    df.to_csv(
-        path_or_buf=(results_dir / "interactions.csv"),
-        index=False,
-    )
-
     ligands_arr = []
-    for ligand in ligand_df.to_dict(orient="records"):
-        simulation_frame_count = get_trajectory_frame_count(top_file, traj_file)
-        if ligand["frames_seen"] / simulation_frame_count < LIGAND_DETECTION_THRESHOLD:
+    for lig, info in lig_info.items():
+        # we try inchikey from the structure, if not found, we check for version with neutral protonation
+        id = inchikey_to_chebiID.get(info[1], None)
+        name = inchikey_to_name.get(info[1], None)
+        print(f"INCHIKEY LOOKUP: {info[1]}, RESULTS: {id}, {name}")
+        if id is None or name is None:
+            neutral_molecule_inchikey = info[1][:-1] + "N"
+            id = inchikey_to_chebiID.get(neutral_molecule_inchikey, None)
+            name = inchikey_to_name.get(neutral_molecule_inchikey, None)
             print(
-                f"Skipping ligand below threshold, seen in {ligand['frames_seen']} out of {simulation_frame_count}",
-                flush=True,
+                f"USED NEUTRAL INCHIKEY: {neutral_molecule_inchikey}, got {name}, {id}"
             )
-            continue
-        id = inchikey_to_chebiID.get(ligand["inchikey"], None)
-        name = inchikey_to_name.get(ligand["inchikey"], None)
-        ligands_arr = run_data.get("ligands", [])
         ligands_arr.append(
             {
                 "id": id,
+                "ident": lig,
                 "name": name,
-                "img": ligand.get("img", ""),
-                "frames_seen": ligand["frames_seen"],
-                "smiles": ligand["smiles"],
-                "inchikey": ligand["inchikey"],
+                "img": "",
+                "smiles": info[0],
+                "inchikey": info[1],
             }
         )
 
     run_data["ligands"] = ligands_arr
 
-    run_data["table"] = create_getcontacts_table(df)
-    run_data["map"] = create_time_resolved_map(df)
+    run_data |= {"tables": [], "interaction_graphs": [], "maps": []}
+
+    for lig, info in lig_info.items():
+        lig_df = plip_results_df.filter(
+            pl.concat_str(["lig_name", "lig_pos"], separator="") == lig
+        )
+        run_data["tables"].append(
+            {"graph": create_getcontacts_table(lig_df), "identifier": lig}
+        )
+        run_data["interaction_graphs"].append(
+            {"graph": create_interaction_area_graph(lig_df), "identifier": lig}
+        )
+        run_data["maps"].append(
+            {"graph": create_time_resolved_map(lig_df), "identifier": lig}
+        )
 
     with open(results_dir / "run_data.json", "w") as f:
         json.dump(run_data, f)
@@ -285,15 +240,19 @@ def analyse_group(results_dirs: list[Path], group_result_dir: Path):
 
     group_data = {
         "exp_data": exp_data.to_dict(orient="split", index=False),
-        "interaction_freq_map": interaction_freq_map,
+        "interaction_freq_map": [{"graph": interaction_freq_map}],
     }
 
     if len(exp_data.columns) > 2:
         interaction_correlation_map, interaction_covariance_map = (
             plot_correlation_covariance_heatmaps(group_df)
         )
-        group_data["interaction_correlation_map"] = interaction_correlation_map
-        group_data["interaction_covariance_map"] = interaction_covariance_map
+        group_data["interaction_correlation_map"] = [
+            {"graph": interaction_correlation_map}
+        ]
+        group_data["interaction_covariance_map"] = [
+            {"graph": interaction_covariance_map}
+        ]
 
     with open(group_result_dir / "group_data.json", "w") as f:
         json.dump(group_data, f)
@@ -301,19 +260,39 @@ def analyse_group(results_dirs: list[Path], group_result_dir: Path):
     return None
 
 
-@task()
-def start_simulation(
-    top_file: Path, traj_file: Path, work_dir: Path, results_dir: Path
+def _start_simulation(
+    top_file: Path,
+    traj_file: Path,
+    work_dir: Path,
+    results_dir: Path,
+    frame_count: int | None = None,
 ):
     # setup for using only specific frames
     print("Starting the simulation!", flush=True)
-    frame_count = get_trajectory_frame_count(top_file, traj_file)
+    if frame_count is None:
+        frame_count = get_trajectory_frame_count(top_file, traj_file)
     frames = [x for x in range(frame_count)]
     plip_dir = work_dir / "plip"
     frames_dir = work_dir / "frames"
-    get_interactions_from_trajectory(top_file, traj_file, plip_dir, frames_dir, frames)
-    analyse_simulation(top_file, traj_file, plip_dir, results_dir)
+    sample_dir = work_dir / "sample"
+    lig_info = get_interactions_from_trajectory(
+        top_file, traj_file, plip_dir, frames_dir, sample_dir, frames
+    )
+    analyse_simulation(
+        top_file, traj_file, lig_info, plip_dir, results_dir, frame_count
+    )
     return len(frames)
+
+
+@task()
+def start_simulation(
+    top_file: Path,
+    traj_file: Path,
+    work_dir: Path,
+    results_dir: Path,
+    frame_count: int | None = None,
+):
+    return _start_simulation(top_file, traj_file, work_dir, results_dir, frame_count)
 
 
 example_results_dir = settings.BASE_DIR / "example_results"

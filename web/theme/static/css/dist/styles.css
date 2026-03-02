@@ -732,9 +732,6 @@
   .p-3 {
     padding: calc(var(--spacing) * 3);
   }
-  .p-4 {
-    padding: calc(var(--spacing) * 4);
-  }
   .p-5 {
     padding: calc(var(--spacing) * 5);
   }
@@ -947,6 +944,16 @@
     }
   }
   @media (hover: hover) {
+    .hover\:bg-gray-400\/80:hover {
+      background-color: color-mix(in srgb, oklch(70.7% 0.022 261.325) 80%, transparent);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\:bg-gray-400\/80:hover {
+        background-color: color-mix(in oklab, var(--color-gray-400) 80%, transparent);
+      }
+    }
+  }
+  @media (hover: hover) {
     .hover\:bg-green-400:hover {
       background-color: var(--color-green-400);
     }
@@ -991,6 +998,14 @@
       --tw-backdrop-opacity: opacity(0%);
       -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
       backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    }
+  }
+  .active\:bg-gray-400\/60:active {
+    background-color: color-mix(in srgb, oklch(70.7% 0.022 261.325) 60%, transparent);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .active\:bg-gray-400\/60:active {
+      background-color: color-mix(in oklab, var(--color-gray-400) 60%, transparent);
     }
   }
   .has-\[span\:hover\]\:bg-indigo-100:has(*:is(span:hover)) {

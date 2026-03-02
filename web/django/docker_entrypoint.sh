@@ -1,6 +1,7 @@
 #!/bin/bash
 export DJANGO_DEBUG="False"
 
+ls -lsah
 python wait_on_port.py db:5432
 python manage.py migrate --no-input
 python manage.py tailwind install --no-input

@@ -10,12 +10,12 @@ services:
       watch:
         - action: sync+restart
           path: ./web/
-          target: /home/mambauser/prod
+          target: /home/user/web
     volumes:
-      - user_uploads:/home/mambauser/prod/user_uploads:z
-      - static_volume:/home/mambauser/prod/staticfiles:z
+      - user_uploads:/home/user/web/user_uploads:z
+      - static_volume:/home/user/web/staticfiles:z
     environment:
-      - NPM_BIN_PATH=/home/mambauser/.nvm/versions/node/v22.19.0/bin/npm
+      - NPM_BIN_PATH=/home/user/.nvm/versions/node/v22.19.0/bin/npm
       - SQL_PASSWORD_FILE=/run/secrets/db_password
       - DJANGO_SECRET_KEY_FILE=/run/secrets/django_key
     env_file: ".env"
@@ -27,7 +27,7 @@ services:
     build:
       context: ./web
       dockerfile: ./huey/Dockerfile
-    command: micromamba run python manage.py run_huey --no-periodic
+    command: python manage.py run_huey --no-periodic
     restart: "unless-stopped"
     deploy:
       replicas: $WORKER_COUNT
@@ -35,16 +35,16 @@ services:
       watch:
         - action: sync+restart
           path: ./web/ligand_service/tasks.py
-          target: /home/mambauser/prod/ligand_service/tasks.py
+          target: /home/user/web/ligand_service/tasks.py
         - action: sync+restart
           path: ./web/ligand_service/graphs.py
-          target: /home/mambauser/prod/ligand_service/graphs.py
-    user: "57439:57439"
+          target: /home/user/web/ligand_service/graphs.py
+    user: "4200:4200"
     environment:
       - SQL_PASSWORD_FILE=/run/secrets/db_password
       - DJANGO_SECRET_KEY_FILE=/run/secrets/django_key
     volumes:
-      - user_uploads:/home/mambauser/prod/user_uploads:z
+      - user_uploads:/home/user/web/user_uploads:z
     env_file: ".env"
     secrets:
       - db_password
@@ -63,14 +63,14 @@ services:
 #      watch:
 #        - action: sync+restart
 #          path: ./web/ligand_service/tasks.py
-#          target: /home/mambauser/prod/ligand_service/tasks.py
+#          target: /home/user/prod/ligand_service/tasks.py
 #    user: "57439:57439"
 #    environment:
 #      - SQL_PASSWORD_FILE=/run/secrets/db_password
 #      - DJANGO_SECRET_KEY_FILE=/run/secrets/django_key
 #      - HUEY_PERIODIC_WORKER=True
 #    volumes:
-#      - user_uploads:/home/mambauser/prod/user_uploads:z
+#      - user_uploads:/home/user/prod/user_uploads:z
 #    env_file: ".env"
 #    secrets:
 #      - db_password

@@ -10,13 +10,17 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
         </svg>
         <p class="ml-2">{{ title|safe }}</p>
-        {% if graph %}
+        {% if graphs_data %}
             <span class="ml-auto bg-gray-300 rounded-lg border p-1 px-2 cursor-pointer hover:bg-gray-400/60"
                   onclick="showPrintView(event)">Print View</span>
         {% endif %}
     </div>
     <div class="info p-2 text-lg border-x border-b border-dotted rounded-lg">
-        {{ graph|safe }}
+	{% for data in graphs_data %}
+	<div class="{% if data.identifier %} hidden ligand-selectable {% endif %} {{ data.identifier }} ">
+	    {{ data.graph|safe }}
+	</div>
+	{% endfor %}
         {% block content %}{% endblock %}
     </div>
 </div>

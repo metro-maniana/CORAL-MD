@@ -2,6 +2,7 @@ import plotly.express as px
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import polars as pl
 
 PAGE_BG_COLOR = "#e5e7eb"
 COMMON_LAYOUT = dict(margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor=PAGE_BG_COLOR)
@@ -10,22 +11,75 @@ COMMON_LAYOUT_TABLE = dict(
 )
 
 
-def create_getcontacts_table(get_contacts_df: pd.DataFrame) -> str:
+COLUMN_RENAME = {
+    "frame": "Frame",
+    "int_type": "Interaction type",
+    "res_pos": "Residue number",
+    "res_name": "Residue name",
+    "site_id": "Binding site",
+    "lig_chain": "Ligand chain",
+    "lig_name": "Ligand name",
+    "lig_pos": "Ligand number",
+    "res_chain": "Residue chain",
+    "aligned_numbering": "Aligned numbering",
+}
+
+
+INTERACTIONS_RENAME = {
+    "hydrophobic_interaction": "Hydrophobic",
+    "hydrogen_bond": "Hydrogen bond",
+    "halogen_bond": "Halogen bond",
+    "salt_bridge": "Salt bridge",
+    "pi_cation_interaction": "Pi-cation",
+    "metal_complex": "Metal complex",
+    "water_bridge": "Water bridge",
+    "pi_stack": "Pi-pi stacking",
+}
+
+
+INTERACTION_TO_COLOR = {
+    "Water bridge": "#B0B0B0",
+    "Hydrophobic": "#8da0cb",
+    "Pi-pi stacking": "#66c2a5",
+    "Pi-cation": "#a6d854",
+    "Hydrogen bond": "#ffd92f",
+    "Halogen bond": "#fc8d62",
+    "Salt bridge": "#e78ac3",
+    "Metal complex": "#d6bbd3",
+}
+
+INTERACTIONS = list(INTERACTION_TO_COLOR.keys())
+COLORS = list(INTERACTION_TO_COLOR.values())
+
+
+def create_getcontacts_table(df: pl.DataFrame) -> str:
+
+    df = df.select(
+        [
+            "frame",
+            "int_type",
+            "res_chain",
+            "res_name",
+            "res_pos",
+        ]
+        + ["aligned_numbering"]
+        if "aligned_numbering" in df.columns
+        else []
+    )
+    df = df.with_columns(
+        pl.col("int_type").cast(pl.String).replace(INTERACTIONS_RENAME)
+    ).rename({k: v for k, v in COLUMN_RENAME.items() if k in df.columns})
+
     fig = go.Figure(
         data=[
             go.Table(
                 header=dict(
-                    values=list(get_contacts_df.columns),
+                    values=list(df.columns),
                     line_color=PAGE_BG_COLOR,
                     height=25,
                 ),
                 cells=dict(
-                    values=[
-                        get_contacts_df[col].apply(
-                            lambda x: "-" if x is None or pd.isna(x) else x
-                        )
-                        for col in get_contacts_df.columns
-                    ],
+                    values=[s for s in df.iter_columns()],
                     line_color=PAGE_BG_COLOR,
                     height=25,
                 ),
@@ -42,13 +96,33 @@ def create_getcontacts_table(get_contacts_df: pd.DataFrame) -> str:
     return table
 
 
-def create_interaction_area_graph(contacts_df: pd.DataFrame) -> str:
-    print(contacts_df.columns.values, flush=True)
-    interaction_count = (
-        contacts_df.groupby(["Frame", "Interaction type"])
-        .agg(Count=("Residue number", "count"))
-        .reset_index()
+def create_interaction_area_graph(df: pl.DataFrame) -> str:
+    df = df.with_columns(
+        pl.col("int_type").cast(pl.String).replace(INTERACTIONS_RENAME)
+    ).rename({k: v for k, v in COLUMN_RENAME.items() if k in df.columns})
+
+    lo, hi = df.select(
+        pl.col("Frame").min().alias("min"), pl.col("Frame").max().alias("max")
+    ).row(0)
+    frames = np.arange(lo, hi + 1)
+
+    relevant_int_types = df.select("Interaction type").unique()
+    all_frames_relevant_interaction_combinations = pl.DataFrame({"Frame": frames}).join(
+        relevant_int_types, how="cross"
     )
+
+    interaction_count = (
+        df.group_by(["Frame", "Interaction type"])
+        .len(name="Count")
+        .join(
+            all_frames_relevant_interaction_combinations,
+            on=["Frame", "Interaction type"],
+            how="right",
+        )
+        .fill_null(0)
+    )
+
+    print()
     print(interaction_count, flush=True)
     fig = px.area(
         interaction_count,
@@ -57,7 +131,18 @@ def create_interaction_area_graph(contacts_df: pd.DataFrame) -> str:
         title="Interaction counts",
         line_group="Interaction type",
         color="Interaction type",
+        color_discrete_map=INTERACTION_TO_COLOR,
     )
+
+    for int_type in relevant_int_types["Interaction type"]:
+        rank = INTERACTIONS.index(int_type)
+        print(int_type, rank)
+        fig.update_traces(selector=dict(name=int_type), legendrank=rank)
+
+    fig.update_traces(opacity=1.0, selector=dict(fill="tonexty"))
+    for trace in fig.data:
+        trace.fillcolor = trace.line.color
+    fig.update_layout(legend=dict(title="Interaction type", tracegroupgap=2))
     fig.update_layout(xaxis=dict(rangeslider=dict(visible=True), type="linear"))
     fig.update_layout(COMMON_LAYOUT)
     graph = fig.to_html(
@@ -72,79 +157,78 @@ def hex2rgba(hexcol, a):
     return f"rgba({int(hexcol[1:3], 16)},{int(hexcol[3:5], 16)},{int(hexcol[5:7], 16)},{a})"
 
 
-def create_time_resolved_map(contacts_df: pd.DataFrame) -> str:
-    sub_df = contacts_df[
-        ["Frame", "Residue name", "Residue number", "Interaction type"]
-    ]
-    sub_df["residue_label"] = (
-        sub_df["Residue name"].astype(str) + "-" + sub_df["Residue number"].astype(str)
+def create_time_resolved_map(df: pd.DataFrame) -> str:
+    df = (
+        df.lazy()
+        .with_columns(pl.col("int_type").cast(pl.String).replace(INTERACTIONS_RENAME))
+        .rename({k: v for k, v in COLUMN_RENAME.items() if k in df.columns})
+        .select(["Frame", "Residue name", "Residue number", "Interaction type"])
+        .with_columns(
+            pl.concat_str(
+                [pl.col("Residue name"), pl.col("Residue number")], separator="-"
+            ).alias("res_label")
+        )
+        .collect()
     )
 
-    residues = sorted(
-        sub_df["residue_label"].unique(), key=lambda s: int(s.split("-")[-1])
-    )
-    frames = np.arange(sub_df["Frame"].min(), sub_df["Frame"].max() + 1)
-
-    types = [
-        "Water bridge",
-        "Hydrophobic",
-        "Pi-pi stacking",
-        "Pi-cation",
-        "Hydrogen bond",
-        "Halogen bond",
-        "Salt bridge",
-        "Metal complex",
-    ]
-
-    colors = [
-        "#B0B0B0",
-        "#8da0cb",
-        "#66c2a5",
-        "#a6d854",
-        "#ffd92f",
-        "#fc8d62",
-        "#e78ac3",
-        "#d6bbd3",
-    ]
-
-    counts = (
-        sub_df.groupby(["residue_label", "Frame", "Interaction type"])
-        .size()
-        .rename("n")
-        .reset_index()
-    )
-    counts = counts.pivot_table(
-        index=["residue_label", "Frame"],
-        columns="Interaction type",
-        values="n",
-        fill_value=0,
-    )
-    counts = counts.reindex(columns=types, fill_value=0)
-    counts = counts.reindex(
-        pd.MultiIndex.from_product(
-            [residues, frames], names=["residue_label", "Frame"]
-        ),
-        fill_value=0,
+    residues = (
+        df.unique(["Residue number", "res_label"])
+        .sort("Residue number")["res_label"]
+        .to_list()
     )
 
-    vals = counts.values.reshape(len(residues), len(frames), len(types))
+    relevant_int_types = sorted(
+        df.select("Interaction type").unique()["Interaction type"].to_list(),
+        key=lambda x: INTERACTIONS.index(x),
+    )
+    print(relevant_int_types)
+
+    lo, hi = df.select(
+        pl.col("Frame").min().alias("min"), pl.col("Frame").max().alias("max")
+    ).row(0)
+    frames = np.arange(lo, hi + 1)
+
+    all_residue_frame_combinations = (
+        df.lazy()
+        .select(pl.col("res_label"))
+        .unique()
+        .join(pl.LazyFrame({"Frame": frames}), how="cross")
+    )
+
+    int_counts = (
+        df.lazy()
+        .group_by(["res_label", "Frame", "Interaction type"])
+        .len(name="count")
+        .pivot(
+            index=["res_label", "Frame"],
+            on="Interaction type",
+            on_columns=relevant_int_types,
+            values="count",
+        )
+        .join(all_residue_frame_combinations, on=["res_label", "Frame"], how="right")
+        .fill_null(0)
+        .sort(
+            pl.col("res_label").str.split("-").list.last().str.to_integer(),
+            pl.col("Frame"),
+        )
+        .collect()
+    )
+
+    vals = (
+        int_counts.select(relevant_int_types)
+        .to_numpy()
+        .reshape(len(residues), len(frames), len(relevant_int_types))
+    )
 
     fig = go.Figure()
 
-    hovertemplate = (
-        "Residue: %{y}<br>"
-        "Frame: %{x}<br>"
-        "Water bridge: %{customdata[0]}<br>"
-        "Hydrophobic: %{customdata[1]}<br>"
-        "Pi-pi stacking: %{customdata[2]}<br>"
-        "Pi-cation: %{customdata[3]}<br>"
-        "Hydrogen bond: %{customdata[4]}<br>"
-        "Halogen bond: %{customdata[5]}<br>"
-        "Salt bridge: %{customdata[6]}<br>"
-        "Metal complex: %{customdata[7]}<extra></extra>"
-    )
+    hovertemplate = "Residue: %{y}<br>Frame: %{x}<br>"
+    for idx, int_type in enumerate(relevant_int_types):
+        hovertemplate += f"{int_type}: %{{customdata[{idx}]}}<br>"
 
-    for k, t in enumerate(types):
+    hovertemplate += "<extra></extra>"
+
+    for k, t in enumerate(relevant_int_types):
         presence = (vals[..., k] > 0).astype(float)
         fig.add_trace(
             go.Heatmap(
@@ -156,8 +240,8 @@ def create_time_resolved_map(contacts_df: pd.DataFrame) -> str:
                 showscale=False,
                 showlegend=False,
                 colorscale=[
-                    [0.0, hex2rgba(colors[k], 0.0)],
-                    [1.0, hex2rgba(colors[k], 1.0)],
+                    [0.0, hex2rgba(INTERACTION_TO_COLOR[t], 0.0)],
+                    [1.0, hex2rgba(INTERACTION_TO_COLOR[t], 1.0)],
                 ],
                 name=t,
                 legendgroup=t,
@@ -166,13 +250,15 @@ def create_time_resolved_map(contacts_df: pd.DataFrame) -> str:
             )
         )
 
-    for k, t in enumerate(types):
+    for k, t in enumerate(relevant_int_types):
         fig.add_trace(
             go.Scatter(
                 x=[None],
                 y=[None],
-                mode="markers",
-                marker=dict(color=colors[k], size=10),
+                mode="lines",
+                stackgroup=1,
+                marker=dict(color=INTERACTION_TO_COLOR[t], size=10),
+                fillcolor=INTERACTION_TO_COLOR[t],
                 name=t,
                 legendgroup=t,
                 showlegend=True,
@@ -180,6 +266,7 @@ def create_time_resolved_map(contacts_df: pd.DataFrame) -> str:
             )
         )
 
+    fig.update_layout(legend=dict(title="Interaction type", tracegroupgap=2))
     fig.update_layout(xaxis=dict(rangeslider=dict(visible=True), type="linear"))
     fig.update_layout(
         COMMON_LAYOUT,
@@ -214,6 +301,9 @@ def contact_fraction_matrix(
     group_df: pd.DataFrame, itype: str | None = None
 ) -> pd.DataFrame:
     df = group_df.copy()
+    df = df.rename(columns=COLUMN_RENAME).replace(
+        {"Interaction type": INTERACTIONS_RENAME}
+    )
 
     df["ResidueLabel"] = [
         _reslabel(rn, rr) for rn, rr in zip(df["Residue name"], df["Residue number"])
@@ -251,9 +341,12 @@ def contact_fraction_matrix(
 
 def plot_contact_fraction_heatmap(
     group_df: pd.DataFrame,
-    title_prefix: str = "Contact fraction per residue",
+    title_prefix: str = "Interaction occurence per residue",
     colorscale: str = "magma_r",
 ):
+    group_df = group_df.rename(columns=COLUMN_RENAME).replace(
+        {"Interaction type": INTERACTIONS_RENAME}
+    )
     types = [t for t in pd.unique(group_df["Interaction type"]) if pd.notna(t)]
     types_sorted = sorted(types)
 
@@ -285,7 +378,7 @@ def plot_contact_fraction_heatmap(
             colorbar=dict(
                 title=dict(
                     text="% of trajectory",
-                    side="right",  # po prawej stronie, ale domyślnie góra → my to poprawimy
+                    side="right",
                 ),
                 tickfont=dict(size=10),
                 xpad=10,
@@ -347,6 +440,9 @@ def plot_correlation_covariance_heatmaps(
     df: pd.DataFrame,
     colorscale: str = "magma_r",
 ):
+    df = df.rename(columns=COLUMN_RENAME).replace(
+        {"Interaction type": INTERACTIONS_RENAME}
+    )
     sims_exp_data = df[df.columns[-3:]].drop_duplicates().reset_index(drop=True)
     sims_frame_data = df[df.columns[:-3].to_list() + [IDENTIFIER_COLUMN]]
     sims_frame_data["residue"] = (

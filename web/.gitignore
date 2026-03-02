@@ -6,3 +6,8 @@ db.*
 sqlite3_db
 staticfiles/*
 example_sims/*
+cli/*
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml

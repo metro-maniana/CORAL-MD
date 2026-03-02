@@ -1,9 +1,13 @@
 {% extends "search/content_window.html" %}
 {% block content %}
     {% for ligand in ligands %}
-        <div class="bg-gray-300 w-fit p-2 rounded-lg">
-            <div class="border w-fit">{{ ligand.img|safe }}</div>
+        <div class="lig-select bg-gray-300 w-fit p-2 rounded-lg border mb-1 hover:bg-gray-400/80 active:bg-gray-400/60 cursor-pointer" onclick="selectLigand(event)" data-ident="{{ ligand.ident }}">
+	    {% if ligand.img %}
+	    <div class="border w-fit">{{ ligand.img|safe }}</div>
+	    {% endif %}
             Name: {{ ligand.name|default_if_none:"Unknown" }}
+            <br>
+	    Identifier: {{ ligand.ident }}
             <br>
             {% if ligand.id %}
                 ChEBI ID: <a href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId={{ ligand.id }}"
@@ -16,8 +20,6 @@
             InChIKey: {{ ligand.inchikey|default_if_none:"Unknown" }}
             <br>
             SMILES: {{ ligand.smiles|default_if_none:"Unknown" }}
-            <br>
-            Detected in {{ ligand.frames_seen }} frame{{ ligand.frames_seen|pluralize }}
             <br>
         </div>
     {% endfor %}

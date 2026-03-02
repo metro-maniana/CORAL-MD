@@ -12,9 +12,15 @@ import shutil
 import requests
 from vmd import molecule, atomsel
 from Bio import SearchIO
+import polars as pl
+from rdkit import Chem
+from rdkit.Chem import rdDetermineBonds
 
-from .models import GPCRdbResidueAPI
 from django.conf import settings
+
+from .handle_plip import run_plip, extract_plip_report
+from .models import GPCRdbResidueAPI
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +39,7 @@ THREADS_FOR_PLIP = os.environ.get("THREADS_FOR_PLIP", "1")
 THREE_TO_ONE = {
     "ALA": "A",
     "ARG": "R",
-    "ASH": "0",  # no idea
+    "ASH": "D",
     "ASN": "N",
     "ASP": "D",
     "CYS": "C",
@@ -275,8 +281,6 @@ def create_translation_dict_by_blast(
         query_slices = list(
             zip(alignment.query_range[::2], alignment.query_range[1::2])
         )
-        print(target_slices, flush=True)
-        print(query_slices, flush=True)
         chain_result = {}
         for qs, ts in zip(query_slices, target_slices):
             keys = named_atoms[qs[0] : qs[1]]
@@ -295,60 +299,17 @@ def create_translation_dict_by_blast(
                         flush=True,
                     )
                 value = v.get("display_generic_number", "")
-                chain_result[k] = (
+                chain_result[":".join(k)] = (
                     re.sub(r"(\.\d*)", "", value)
                     if value is not None
                     else v["protein_segment"]
                 )
-        for atom in named_atoms:
-            if atom not in chain_result:
-                print(f"ATOM NOT MAPPED! {atom}", flush=True)
+        # for atom in named_atoms:
+        #    if atom not in chain_result:
+        #        print(f"ATOM NOT MAPPED! {atom}", flush=True)
         # merge results from each chain
         result_dict = {**result_dict, **chain_result}
     return (result_dict, alignment_scores) if len(result_dict) > 0 else None
-
-
-def get_results_plip(
-    pdbfiles: list[Path], outdir: Path | None = None, worker_count: int = 1
-):
-    if outdir is not None:
-        prev_wd = os.getcwd()
-        os.chdir(outdir)
-    processes = []
-    # could be optimized dynamically
-    for worker_idx in range(worker_count):
-        pdbfiles_part = [
-            pdbfile
-            for i, pdbfile in enumerate(pdbfiles)
-            if i % worker_count == worker_idx
-        ]
-        print(f"Starting plip instance with: {len(pdbfiles_part)} frames")
-        if len(pdbfiles_part) == 0:
-            continue
-        process = sb.Popen(
-            [
-                "plip",
-                "-v",
-                "-x",
-                "-f",
-            ]
-            + pdbfiles_part,
-            stdout=sb.PIPE,
-            stderr=sb.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-        processes.append(process)
-
-    if outdir is not None:
-        os.chdir(prev_wd)
-
-    assert process.stdout is not None
-
-    [process.wait() for process in processes]
-    process.wait()
-    print("PLIP: Done!")
-    return process.returncode == 0
 
 
 def get_trajectory_frame_count(topology_file: Path, trajectory_file: Path) -> int:
@@ -443,7 +404,22 @@ def get_frames_from_trajectory(
             last=frame - offset,
             selection=protein,
         )
-        outfiles.append(outfile)
+        outfiles.append(Path(outfile))
+    return outfiles
+
+
+def clean_pdb_files_from_vmd(pdb_files: list[Path]) -> list[Path]:
+    outfiles = []
+    for pdb_file in pdb_files:
+        cleaned_file = pdb_file.parents[0] / f"clean_{pdb_file.name}"
+        with (
+            open(pdb_file) as f_in,
+            open(cleaned_file, "w") as f_out,
+        ):
+            for line in f_in:
+                if "pseu" not in line:
+                    f_out.write(line)
+        outfiles.append(cleaned_file)
     return outfiles
 
 
@@ -452,6 +428,7 @@ def get_interactions_from_trajectory(
     trajectory_file: Path,
     plip_dir: Path,
     frames_dir: Path,
+    sample_dir: Path,
     frames: list[int],
 ):
     frames_dir.mkdir(parents=True)
@@ -460,10 +437,146 @@ def get_interactions_from_trajectory(
     pdbs = get_frames_from_trajectory(
         topology_file, trajectory_file, frames_dir, frames
     )
+    clean_pdbs = clean_pdb_files_from_vmd(pdbs)
+    for pdb in pdbs:
+        pdb.unlink()
+    conect_rows, ligand_info = get_ligand_info_from_trajectory(
+        topology_file, trajectory_file, sample_dir
+    )
+    for pdb in clean_pdbs:
+        with open(pdb) as f:
+            pdb_contents = f.read()
+        with open(pdb, "w") as f:
+            for line in pdb_contents.split("\n"):
+                if not line.startswith("END"):
+                    f.write(line + "\n")
+                else:
+                    f.write(conect_rows)
+                    f.write("END")
+                    break
     try:
-        get_results_plip(pdbs, plip_dir, settings.MAX_THREADS_PER_WORKER)
+        run_plip(clean_pdbs, plip_dir, settings.MAX_THREADS_PER_WORKER)
     finally:
         shutil.rmtree(frames_dir)
     tock = datetime.datetime.now()
     print("Done...")
     print("Running time: ", (tock - tick))
+    return ligand_info
+
+
+# PDB fields taken from: https://www.wwpdb.org/documentation/file-format-content/format33/sect9.html#ATOM
+def subset_pdb(resName: str, resSeq: str, in_pdb: Path) -> str:
+    assert len(resSeq) <= 4, "resSeq is at most 4 chars, as defined in wwPDB standard"
+    resSeq = resSeq.rjust(4)
+    pdb_subset = ""
+    with open(in_pdb) as f_in:
+        for line in f_in:
+            # 80 char width is defined in the standard, but deviations happen!
+            if not line.startswith("ATOM") or len(line) < 78 or "pseu" in line:
+                continue
+            if line[17:20] == resName and line[22:26] == resSeq:
+                pdb_subset += line
+
+    return pdb_subset
+
+
+def create_mol_with_bonds(pdb_block):
+    charges = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]
+    # heuristic, calculations for ATP seem very slow
+    if "ATP" in pdb_block:
+        charges = [-3, 3, -4, 4, 0, -1, 1, -2, 2, -5, 5, -6, 6]
+    for charge in charges:
+        try:
+            print("Trying charge: ", charge)
+            mol = Chem.MolFromPDBBlock(pdb_block, removeHs=False)
+            mol = Chem.RemoveHs(mol, implicitOnly=True)
+            rdDetermineBonds.DetermineBondOrders(mol, charge=charge)
+            break
+        except Exception as _:
+            pass
+    return mol
+
+
+def remap_atom_indexes(new_pdb_block: str, ref_pdb_block: str):
+    idx_map_ATOM: dict[str, str] = {}
+    for line in ref_pdb_block.split("\n"):
+        if not line.startswith("ATOM") or len(line) < 78 or "pseu" in line:
+            continue
+        atom_idx = line[6:11]
+        coords = line[30:54]
+        idx_map_ATOM[coords] = atom_idx
+
+    out = ""
+    idx_map_CONECT: dict[str, str] = {}
+    for line in new_pdb_block.split("\n"):
+        if line.startswith("ATOM"):
+            coords = line[30:54]
+            new_atom_idx = line[6:11]
+            ref_atom_idx = idx_map_ATOM[coords]
+            idx_map_CONECT[new_atom_idx] = ref_atom_idx
+            line = line[:6] + ref_atom_idx + line[11:] + "\n"
+            out += line
+        elif line.startswith("CONECT"):
+            new_line = "CONECT"
+            for i in range(6, 26, 5):
+                new_idx = line[i : i + 5]
+                ref_idx = idx_map_CONECT.get(new_idx, "     ")
+                new_line += ref_idx
+            out += new_line + "\n"
+
+    return out
+
+
+def get_ligand_info_from_trajectory(
+    topology_file, trajectory_file, sample_dir: Path, used_frame: int | None = None
+):
+    """Runs plip for a single frame, to identify ligands.
+    Identified ligands are further analysed to find bonds within them.
+    Returns dict with info about ligands and CONECT rows for pdb.
+    """
+    sample_dir.mkdir(exist_ok=True, parents=True)
+    if used_frame is None:
+        frame_count = get_trajectory_frame_count(topology_file, trajectory_file)
+        # in case of a 2 frame trajectory
+        used_frame = (frame_count // 2) or 1
+
+    raw_pdb_filepath = get_frames_from_trajectory(
+        topology_file, trajectory_file, sample_dir, [used_frame]
+    )[0]
+    pdb_filepath = clean_pdb_files_from_vmd([raw_pdb_filepath])[0]
+
+    run_plip([pdb_filepath], sample_dir)
+
+    df = extract_plip_report(sample_dir / "report.xml")
+    print(df)
+
+    ligands = (
+        df.lazy()
+        .select(["lig_pos", "lig_type", "lig_name"])
+        .filter(pl.col("lig_type") == "SMALLMOLECULE")
+        .unique()
+        .collect()
+    )
+
+    lig_pdb_blocks = []
+    for lig_pos, lig_type, lig_name in ligands.rows():
+        lig_ident = f"{lig_name}{lig_pos}"
+        lig_pdb_blocks.append(
+            (lig_ident, subset_pdb(lig_name, str(lig_pos), pdb_filepath))
+        )
+
+    conect_info = ""
+    lig_info_dict = {}
+
+    for lig_ident, lig_pdb_block in lig_pdb_blocks:
+        mol = create_mol_with_bonds(lig_pdb_block)
+        pdb_block_with_bonds = Chem.MolToPDBBlock(mol, flavor=4)
+        remapped_pdb_block = remap_atom_indexes(pdb_block_with_bonds, lig_pdb_block)
+        for line in remapped_pdb_block.split("\n"):
+            if line.startswith("CONECT"):
+                conect_info += line + "\n"
+
+        lig_smiles = Chem.MolToSmiles(mol)
+        lig_inchikey = Chem.MolToInchiKey(mol)
+        lig_info_dict[lig_ident] = (lig_smiles, lig_inchikey)
+    return conect_info, lig_info_dict

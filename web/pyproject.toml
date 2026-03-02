@@ -1,3 +1,56 @@
+[project]
+authors = [{name = "Ziz", email = ""}]
+dependencies = ["django-tailwind==4.2.0", "redis==6.4.0", "django-prometheus==2.4.1"]
+name = "web"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge", "https://conda.anaconda.org/bioconda", "https://conda.anaconda.org/anaconda"]
+platforms = ["linux-64"]
+
+[tool.pixi.tasks]
+lint = "ruff check"
+fmt = "ruff format"
+style = { depends-on = ["fmt", "lint"] }
+
+clear = { cmd="rm -r huey.db* sqlite3_db user_uploads" }
+
+prep-blast = { cmd="python setup/makeblastdb.py", outputs = ["blast/"] }
+prep-chebi = { cmd="python setup/getchebi.py", outputs = ["chebi/"] }
+prep-django = { cmd="python manage.py makemigrations && python manage.py migrate", inputs=["ligand_service/migrations/"] }
+
+analyse-sim = { cmd="python -m ligand_service.cli_endpoint {{ sim_path }}", args = ["sim_path"]}
+
+[tool.pixi.dependencies]
+python = "3.12.11.*"
+requests = "2.32.4.*"
+vmd-python = "3.1.7.*"
+biopython = "1.85.*"
+blast = { version = "2.17.0.*", channel = "bioconda" }
+plip = "2.3.1.*"
+pandas = "2.3.1.*"
+plotly = "6.3.0.*"
+redis = { version = "5.0.3.*", channel = "anaconda" }
+huey = "2.5.3.*"
+django = "5.2.4.*"
+django-browser-reload = "1.18.0.*"
+django-stubs = "5.2.2.*"
+django-widget-tweaks = "1.4.5.*"
+psycopg2 = "2.9.10.*"
+gunicorn = "23.0.0.*"
+xmltodict = "0.15.0.*"
+rdkit = "2025.3.6.*"
+python-dotenv = "1.1.1.*"
+pip = "25.2.*"
+polars = ">=1.38.1,<2"
+pylint = ">=4.0.5,<5"
+pyarrow = ">=21.0.0,<22"
+
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
 

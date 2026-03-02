@@ -40,6 +40,15 @@ def get_trajectory_frame_count(topology_file: Path, trajectory_file: Path) -> in
     return count
 
 
+def get_trajectory_files(dir) -> TrajectoryFiles | None:
+    files = get_files_maestro(dir)
+    if files is None:
+        files = get_files_dir(dir)
+    if files is None:
+        return None
+    return files
+
+
 class Simulation(ExportModelOperationsMixin("simulation"), models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     dirname = models.CharField(max_length=128)
@@ -135,11 +144,9 @@ class Simulation(ExportModelOperationsMixin("simulation"), models.Model):
             return TrajectoryFiles(
                 topology=Path(self.topology_file), trajectory=Path(self.trajectory_file)
             )
-        files = get_files_maestro(dir)
+        files = get_trajectory_files(dir)
         if files is None:
-            files = get_files_dir(dir)
-        if files is None:
-            return None
+            raise Exception
         self.topology_file = files.topology
         self.trajectory_file = files.trajectory
         self.save()
@@ -187,7 +194,7 @@ def get_files_dir(directory: Path) -> TrajectoryFiles | None:
     top = None
     trj = None
     for file in directory.iterdir():
-        if file.suffix in [".pdb", ".psf"] and top is None:
+        if file.suffix in [".pdb", ".psf", ".top", ".g96", ".gro"] and top is None:
             top = file
         elif file.suffix in [".dcd", ".xtc", ".trr"] and trj is None:
             trj = file

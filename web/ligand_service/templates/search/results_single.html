@@ -6,11 +6,11 @@
 {% block filename %}"interactions.csv"{% endblock %}
 {% block download_desc %}Download simulation data{% endblock %}
 {% block content_windows %}
-    {% include "search/content_window.html" with title="Interactions by frame" graph=run.table %}
-    {% include "search/content_window.html" with title="Overall interactions" graph=run.interaction_graph %}
-    {% include "search/content_window.html" with title="Interaction map" graph=run.map %}
     {% include "search/content_window_lig.html" with title="Detected ligands" ligands=run.ligands %}
-    {% include "search/content_window_align.html" with title="Protein numbering / alignment" alignment_scores=run.alignment_scores %}
+    {% include "search/content_window.html" with title="Interactions by frame" graphs_data=run.tables %}
+    {% include "search/content_window.html" with title="Overall interactions" graphs_data=run.interaction_graphs %}
+    {% include "search/content_window.html" with title="Interaction map" graphs_data=run.maps %}
+    {% include "search/content_window_align.html" with title="Protein numbering" alignment_scores=run.alignment_scores %}
 {% endblock %}
 {% block js_scripts %}
     <script src="{% static 'ligand_service/results.js' %}"> </script>

@@ -1,47 +1,54 @@
-FROM mambaorg/micromamba:2.3.0
+FROM ghcr.io/prefix-dev/pixi:latest AS build
 
-USER root
+WORKDIR /home/user/web
+
+COPY ./pyproject.toml .
+COPY ./pixi.lock .
+RUN pixi install --locked
+RUN pixi shell-hook -s bash > /shell-hook
+RUN echo "#!/bin/bash" > /home/user/web/entrypoint.sh
+RUN cat /shell-hook >> /home/user/web/entrypoint.sh
+RUN echo 'exec "$@"' >> /home/user/web/entrypoint.sh
+
+COPY ./setup ./setup
+RUN . /home/user/web/entrypoint.sh && python /home/user/web/setup/getchebi.py
+RUN . /home/user/web/entrypoint.sh && python /home/user/web/setup/makeblastdb.py
+
+FROM debian:bookworm-slim AS production
+WORKDIR /home/user/web
 RUN apt-get update && apt-get install curl -y
 
-RUN mkdir -p /home/$MAMBA_USER/prod/user_uploads
-RUN mkdir -p /home/$MAMBA_USER/prod/staticfiles
+RUN useradd -u 4200 user && chown -R user:user /home/user
 
-RUN chown -R $MAMBA_USER:$MAMBA_USER /home/$MAMBA_USER
-RUN chmod 755 /home/$MAMBA_USER/prod/staticfiles
-RUN chmod 755 /home/$MAMBA_USER/prod/user_uploads
+COPY --from=build --chown=user:user /home/user/web/.pixi/envs/default /home/user/web/.pixi/envs/default
+COPY --from=build --chown=user:user --chmod=0755 /home/user/web/entrypoint.sh /home/user/web/entrypoint.sh
+COPY --from=build --chown=user:user /home/user/web/chebi /home/user/web/chebi
+COPY --from=build --chown=user:user /home/user/web/blast /home/user/web/blast
 
-RUN mkdir -p /var/log/django /var/log/huey
-RUN chown -R $MAMBA_USER:$MAMBA_USER /var/log/huey
-RUN chown -R $MAMBA_USER:$MAMBA_USER /var/log/django 
+WORKDIR /home/user/web
+COPY --chown=user:user . .
 
-USER $MAMBA_USER
 RUN id
-ENV NVM_DIR=/home/$MAMBA_USER/.nvm
+USER user 
+ENV NVM_DIR=/home/user/.nvm
 RUN mkdir -p $NVM_DIR \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash \
-    && . "$HOME/.nvm/nvm.sh" \
+    && . "$NVM_DIR/nvm.sh" \
     && nvm install v22.19.0 \
     && nvm which node \
     && node -v \
     && npm -v
 ENV PATH=$NVM_DIR/versions/node/v22.19.0/bin/:$PATH
 
-WORKDIR /home/$MAMBA_USER/prod
+COPY --chown=user:user . .
 
-COPY --chown=$MAMBA_USER:$MAMBA_USER ./env.yaml env.yaml
-
-RUN micromamba install -y -n base -f ./env.yaml && \
-    micromamba clean --all --yes
-
-COPY --chown=$MAMBA_USER:$MAMBA_USER ./setup ./setup
-RUN micromamba run python /home/$MAMBA_USER/prod/setup/makeblastdb.py
-RUN micromamba run python /home/$MAMBA_USER/prod/setup/getchebi.py 
-
-COPY --chown=$MAMBA_USER:$MAMBA_USER . .
-ENV ENV_NAME=base
 ENV PYTHONUNBUFFERED=1
 ENV RUNNING_IN_DOCKER=True
 
-COPY --chown=$MAMBA_USER:$MAMBA_USER ./example_results ./user_uploads
+RUN mkdir -p /home/user/web/user_uploads && chown -R user:user /home/user/web/user_uploads
+RUN mkdir -p /home/user/web/staticfiles && chown -R user:user /home/user/web/staticfiles
 
-CMD ["micromamba", "run", "sh", "./django/docker_entrypoint.sh"]
+COPY --chown=user:user ./example_results ./user_uploads
+
+ENTRYPOINT [ "/home/user/web/entrypoint.sh" ]
+CMD ["sh", "./django/docker_entrypoint.sh"]

@@ -2,6 +2,8 @@ import socket
 import time
 import sys
 
+sys.exit(0)
+
 
 def wait_on_port(host, port, timeout=60, interval=1):
     end_time = time.time() + timeout

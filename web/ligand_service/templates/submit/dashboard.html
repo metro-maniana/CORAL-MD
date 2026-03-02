@@ -2,17 +2,30 @@
 {% load widget_tweaks %}
 {% load static %}
 {% block content %}
-    <details open class="mt-4 text-l rounded-lg border p-2 bg-gray-300">
-        <summary class="text-2xl  cursor-pointer">What is CORAL-MD?</summary>
-        This tool processes molecular dynamics (MD) trajectories to examine how ligands interact with their protein targets. It identifies and characterizes interaction types such as hydrogen bonds, hydrophobic contacts, and aromatic stacking, and presents the results through time-resolved visualizations. Multiple uploaded simulations can be used to create a group analysis. User can choose to provide experimental data to see the correlation between experiment outcomes and simulation results. An example can be seen under <a href="/show/group/6eb09d37-a6bd-41b2-b69f-e7126aae0e26"
-    class="text-blue-700 underline-offset-2 underline">this link</a>.
-        <br>
-        <br>
-        To reduce possible errors, the tool is capable of automatically recognizing and removing objects other than proteins and ligands. This process is not perfect; it is recommended to provide already cleaned trajectories.
-        <br>
-        <br>
-        For technical details and attributions, go to the About page.
+<details open class="mt-4 text-l rounded-lg border p-2 bg-gray-300">
+    <summary class="text-2xl  cursor-pointer">What is CORAL-MD?</summary>
+    This tool processes molecular dynamics (MD) trajectories to examine how ligands interact with their protein targets. It identifies and characterizes interaction types such as hydrogen bonds, hydrophobic contacts, and aromatic stacking, and presents the results through time-resolved visualizations. Multiple uploaded simulations can be used to create a group analysis. User can choose to provide experimental data to see the correlation between experiment outcomes and simulation results. An example can be seen under <a href="/show/group/6eb09d37-a6bd-41b2-b69f-e7126aae0e26"
+	class="text-blue-700 underline-offset-2 underline">this link</a>.
+    <br>
+    <br>
+    To reduce possible errors, the tool is capable of automatically recognizing and removing objects other than proteins and ligands. This process is not perfect; it is recommended to provide already cleaned trajectories.
+    <br>
+    <br>
+    For technical details and attributions, go to the About page.
     </p>
+</details>
+<details class="mt-4 text-l rounded-lg border p-2 bg-gray-300">
+    <summary class="text-2xl  cursor-pointer">Usage limits</summary>
+    To make the platform accessible to all, we need to limit usage by any single user. We make the following restrictions:
+    <br>
+    <br>
+    <ul>
+	<li> - Trajectories must weigh at most 2GB.</li>
+	<li> - Trajectories must have at most 2010 frames. All of them will be used.</li>
+	<li> - Users can have at most 4 trajectories being analysed at any given moment.</li>
+    </ul>
+    <br>
+    Increasing stride when making the trajectories can help to stay within these limits.
 </details>
 <p class="my-4 text-xl">Please cite as...(TBD)</p>
 <div class="border rounded-lg p-2 ">

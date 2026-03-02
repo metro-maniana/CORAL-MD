@@ -6,11 +6,14 @@ staticfiles/*
 example_sims/*
 
 .ruff_cache
+.pixi
+!.pixi/config.toml
 
 blast/*
 chebi/*
 user_uploads/*
 staticfiles/*
 theme/static_src/node_modules
+cli/*
 
 Dockerfile
