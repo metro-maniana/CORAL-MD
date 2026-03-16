@@ -463,8 +463,8 @@ confirmButton.addEventListener("click", (event) => {
 	r.opts.query = { 'fileCount': fileCount, 'uploadUUID': uuid4, 'totalFileSizeInMB': totalFileSizeInMB };
 	// naming the directory
 	if (selectedInput === "topTrj") {
-		fileNames = [r.files[0].fileName, r.files[1].fileName].sort()
-		dirName = fileNames[0] + "-" + fileNames[1]
+		const fileNames = [r.files[0].fileName, r.files[1].fileName].sort()
+		const dirName = fileNames[0] + "-" + fileNames[1]
 		r.files.forEach((file) => { file.relativePath = `${dirName}/${file.fileName}` })
 	}
 

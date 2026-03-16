@@ -15,7 +15,7 @@
     </p>
 </details>
 <details class="mt-4 text-l rounded-lg border p-2 bg-gray-300">
-    <summary class="text-2xl  cursor-pointer">Usage limits</summary>
+    <summary class="text-2xl  cursor-pointer">Usage limits and recommendations</summary>
     To make the platform accessible to all, we need to limit usage by any single user. We make the following restrictions:
     <br>
     <br>
@@ -25,7 +25,10 @@
 	<li> - Users can have at most 4 trajectories being analysed at any given moment.</li>
     </ul>
     <br>
-    Increasing stride when making the trajectories can help to stay within these limits.
+    Increasing stride when exporting the trajectories can help to stay within these limits.
+    <br>
+    <br>
+    CORAL-MD tries to correct force field specific naming of residues and atoms, but doing so is not always possible. It is recommended that the provided trajectories already have residues and atoms renamed to their standard PDB equivalents before use. For example, HSE/HSD/HSP (CHARMM) or HIE/HID/HIP (AMBER) should be renamed to HIS, and force field specific atom names such as OH2 (CHARMM water oxygen) should be renamed to O.
 </details>
 <p class="my-4 text-xl">Please cite as...(TBD)</p>
 <div class="border rounded-lg p-2 ">

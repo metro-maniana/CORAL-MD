@@ -351,11 +351,19 @@ WATER_SELECTION = WATER_SELECTION[:-4] + ")"
 residue_map = {
     "HIE": "HIS",
     "HIP": "HIS",
+    "HSE": "HIS",
+    "HSD": "HIS",
+    "HSP": "HIS",
     "HID": "HIS",
     "ASH": "ASP",
+    "ASPP": "ASP",
     "GLH": "GLU",
+    "GLUP": "GLU",
     "CYX": "CYS",
     "CYM": "CYS",
+    "CYSH": "CYS",
+    "LYN": "LYS",
+    "LSN": "LYS",
 }
 
 
@@ -383,7 +391,7 @@ def get_frames_from_trajectory(
     offset = min(frames)
     outfiles = []
     water = atomsel(f"{WATER_SELECTION}", molid=molid)
-    water.resname = "WAT"
+    water.resname = "HOH"
 
     for nonstandard_name, standard_name in residue_map.items():
         residues = atomsel(f"resname {nonstandard_name}", molid=molid)
@@ -569,7 +577,14 @@ def get_ligand_info_from_trajectory(
     lig_info_dict = {}
 
     for lig_ident, lig_pdb_block in lig_pdb_blocks:
+        print(f"Determining bonds for {lig_ident}")
         mol = create_mol_with_bonds(lig_pdb_block)
+        if mol is None:
+            print(
+                f"Skipping mol: {lig_ident}, failed to create CONECT records!",
+                flush=True,
+            )
+            continue
         pdb_block_with_bonds = Chem.MolToPDBBlock(mol, flavor=4)
         remapped_pdb_block = remap_atom_indexes(pdb_block_with_bonds, lig_pdb_block)
         for line in remapped_pdb_block.split("\n"):

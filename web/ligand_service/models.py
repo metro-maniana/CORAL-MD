@@ -193,7 +193,10 @@ def get_files_maestro(dir: Path) -> TrajectoryFiles | None:
 def get_files_dir(directory: Path) -> TrajectoryFiles | None:
     top = None
     trj = None
-    for file in directory.iterdir():
+    for file in directory.rglob("*"):
+        if not file.is_file():
+            continue
+        print(f"File: {file} Suffix: {file.suffix}", flush=True)
         if file.suffix in [".pdb", ".psf", ".top", ".g96", ".gro"] and top is None:
             top = file
         elif file.suffix in [".dcd", ".xtc", ".trr"] and trj is None:

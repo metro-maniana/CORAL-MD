@@ -3,6 +3,7 @@ import csv
 import json
 import logging
 import shutil
+import traceback
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
@@ -25,10 +26,12 @@ file_manager = ResumableFilesManager()
 
 
 def start_sim_task(sim: Simulation, session_key: str):
+    print("Trying to start analysis...", flush=True)
     if sim.is_not_queued():
         files = sim.get_trajectory_files()
         print("Starting simulation!", flush=True)
         if files is None:
+            print("Cannot start analysis, files are None!", flush=True)
             return HttpResponse()
         print("Files are not None!", flush=True)
         sim.analysis_task_id = tasks.start_simulation(
@@ -114,12 +117,14 @@ def upload_sim(request):
                     settings.MAXIMUM_FRAMES_PER_SIMULATION is not None
                     and settings.MAXIMUM_FRAMES_PER_SIMULATION < sim.frame_count
                 ):
+                    print("Simulation is too big, delete!", flush=True)
                     sim.delete()
                     return HttpResponse(422)
                 sim.save()
+                print(f"Sim: {sim} added succesfully!")
                 start_sim_task(sim, request.session.session_key)
             except Exception as e:
-                print(f"Db error: {e}")
+                print(f"Simulation files not added!\n Error: {traceback.format_exc()}")
     # elif request.method == "GET":
     #     has_chunk, dir_complete = file_manager.handle_resumable_get_request(
     #         request.GET,
