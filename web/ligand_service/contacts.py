@@ -8,6 +8,7 @@ import datetime
 import re
 import logging
 import shutil
+import traceback
 
 import requests
 from vmd import molecule, atomsel
@@ -15,6 +16,7 @@ from Bio import SearchIO
 import polars as pl
 from rdkit import Chem
 from rdkit.Chem import rdDetermineBonds
+import MDAnalysis
 
 from django.conf import settings
 
@@ -348,6 +350,8 @@ for syn in WATER_SYNONYMS:
     WATER_SELECTION += f"resname {syn} or "
 WATER_SELECTION = WATER_SELECTION[:-4] + ")"
 
+ATOM_NAME_SUBSTITUTIONS = MDAnalysis.guesser.tables.atomelements
+
 residue_map = {
     "HIE": "HIS",
     "HIP": "HIS",
@@ -392,6 +396,10 @@ def get_frames_from_trajectory(
     outfiles = []
     water = atomsel(f"{WATER_SELECTION}", molid=molid)
     water.resname = "HOH"
+
+    for nonstandard_name, standard_name in ATOM_NAME_SUBSTITUTIONS.items():
+        atoms = atomsel(f'name "{nonstandard_name}"', molid=molid)
+        atoms.name = standard_name
 
     for nonstandard_name, standard_name in residue_map.items():
         residues = atomsel(f"resname {nonstandard_name}", molid=molid)
@@ -488,20 +496,47 @@ def subset_pdb(resName: str, resSeq: str, in_pdb: Path) -> str:
     return pdb_subset
 
 
+TWO_LETTER_ELEMENTS = {
+    "FE",
+    "ZN",
+    "MG",
+    "CA",
+    "CL",
+    "BR",
+    "HG",
+    "CU",
+    "MN",
+    "NA",
+    "AL",
+    "SI",
+}
+
+
 def create_mol_with_bonds(pdb_block):
+    pdb = ""
+    for line in pdb_block.split("\n"):
+        if line.startswith("ATOM"):
+            atom = line[12:16]
+            element = re.search(r"(^[a-zA-Z]+)", atom.strip()).group()
+            if len(element) >= 2 and element[:2] in TWO_LETTER_ELEMENTS:
+                element = element[:2].capitalize()  # e.g. 'Fe', 'Zn'
+            pdb += line[:77] + element + "\n"
+
     charges = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]
     # heuristic, calculations for ATP seem very slow
     if "ATP" in pdb_block:
         charges = [-3, 3, -4, 4, 0, -1, 1, -2, 2, -5, 5, -6, 6]
+
     for charge in charges:
         try:
             print("Trying charge: ", charge)
-            mol = Chem.MolFromPDBBlock(pdb_block, removeHs=False)
+            mol = Chem.MolFromPDBBlock(pdb, removeHs=False)
             mol = Chem.RemoveHs(mol, implicitOnly=True)
             rdDetermineBonds.DetermineBondOrders(mol, charge=charge)
             break
-        except Exception as _:
+        except Exception as e:
             pass
+            # traceback.print_exc()
     return mol
 
 

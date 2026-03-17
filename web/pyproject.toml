@@ -50,6 +50,7 @@ pip = "25.2.*"
 polars = ">=1.38.1,<2"
 pylint = ">=4.0.5,<5"
 pyarrow = ">=21.0.0,<22"
+mdanalysis = ">=2.10.0,<3"
 
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
