@@ -65,15 +65,15 @@ def upload_sim(request):
     if not request.session.session_key:
         request.session.create()
     if request.POST.get("uploadUUID", "") == "":
-        return HttpResponse(status=400)
+        return HttpResponse(status=404)
     total_size = request.POST.get("totalFileSizeInMB", "")
     if total_size == "" or total_size is None:
-        return HttpResponse(status=400)
+        return HttpResponse(status=404)
     if (
         settings.MAXIMUM_UPLOAD_SIZE_IN_MB is not None
         and settings.MAXIMUM_UPLOAD_SIZE_IN_MB < float(total_size)
     ):
-        return HttpResponse(status=400)
+        return HttpResponse(status=404)
     if settings.MAXIMUM_UPLOADS_IN_QUEUE is not None:
         sims = Simulation.objects.filter(user_key=request.session.session_key)
         in_queue_count = 0
@@ -89,7 +89,7 @@ def upload_sim(request):
         print(f"Counted {in_queue_count} sims in quque")
         if in_queue_count >= settings.MAXIMUM_UPLOADS_IN_QUEUE:
             print("Rejecting due to queue limit!")
-            return HttpResponse(status=400)
+            return HttpResponse("Too many files in queue!", status=404)
 
     if request.method == "POST":
         _, dir_complete = file_manager.handle_resumable_post_request(
@@ -109,7 +109,7 @@ def upload_sim(request):
                 files = sim.get_trajectory_files()
                 if files is None:
                     sim.delete()
-                    return HttpResponse(422)
+                    return HttpResponse(status=404)
                 sim.frame_count = get_trajectory_frame_count(
                     files.topology, files.trajectory
                 )
@@ -119,12 +119,19 @@ def upload_sim(request):
                 ):
                     print("Simulation is too big, delete!", flush=True)
                     sim.delete()
-                    return HttpResponse(422)
+                    return HttpResponse(
+                        "Given files were too big. Please try reducing system size and number of frames.",
+                        status=404,
+                    )
                 sim.save()
                 print(f"Sim: {sim} added succesfully!")
                 start_sim_task(sim, request.session.session_key)
-            except Exception as e:
+            except Exception as _:
                 print(f"Simulation files not added!\n Error: {traceback.format_exc()}")
+                return HttpResponse(
+                    'Failed to load the simulation, please see "Usage limits and recommendations" section for possible reasons.',
+                    status=404,
+                )
     # elif request.method == "GET":
     #     has_chunk, dir_complete = file_manager.handle_resumable_get_request(
     #         request.GET,

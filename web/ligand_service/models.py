@@ -146,7 +146,7 @@ class Simulation(ExportModelOperationsMixin("simulation"), models.Model):
             )
         files = get_trajectory_files(dir)
         if files is None:
-            raise Exception
+            return None
         self.topology_file = files.topology
         self.trajectory_file = files.trajectory
         self.save()
@@ -196,7 +196,6 @@ def get_files_dir(directory: Path) -> TrajectoryFiles | None:
     for file in directory.rglob("*"):
         if not file.is_file():
             continue
-        print(f"File: {file} Suffix: {file.suffix}", flush=True)
         if file.suffix in [".pdb", ".psf", ".top", ".g96", ".gro"] and top is None:
             top = file
         elif file.suffix in [".dcd", ".xtc", ".trr"] and trj is None:

@@ -476,6 +476,17 @@ r.on('progress', function(event) {
 	uploadStatusIndicator.innerText = (r.progress() * 100).toPrecision(4) + "%";
 });
 
+
+r.on('fileError', function(file, message, chunk) {
+	if (chunk && chunk.xhr && chunk.xhr.status === 422) {
+		const response = JSON.parse(chunk.xhr.responseText);
+		alert(response.message || 'Validation error');
+	} else {
+		alert('Sending files failed. Please see section "Usage limits and recommendations" for possible reasons.');
+	}
+});
+
+
 async function deleteAnalysis(analysisContainer) {
 	const resultsId = analysisContainer.querySelector("a").href.split("/").at(-1)
 	const response = fetch("api/group/delete", {
