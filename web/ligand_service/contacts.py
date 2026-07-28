@@ -8,7 +8,6 @@ import datetime
 import re
 import logging
 import shutil
-import traceback
 
 import requests
 from vmd import molecule, atomsel
@@ -16,7 +15,7 @@ from Bio import SearchIO
 import polars as pl
 from rdkit import Chem
 from rdkit.Chem import rdDetermineBonds
-import MDAnalysis
+import MDAnalysis.guesser.tables
 
 from django.conf import settings
 
@@ -534,7 +533,7 @@ def create_mol_with_bonds(pdb_block):
             mol = Chem.RemoveHs(mol, implicitOnly=True)
             rdDetermineBonds.DetermineBondOrders(mol, charge=charge)
             break
-        except Exception as e:
+        except Exception:
             pass
             # traceback.print_exc()
     return mol

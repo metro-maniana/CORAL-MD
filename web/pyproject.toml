@@ -1,6 +1,6 @@
 [project]
 authors = [{name = "Ziz", email = ""}]
-dependencies = ["django-tailwind==4.2.0", "redis==6.4.0", "django-prometheus==2.4.1"]
+dependencies = ["django-tailwind==4.2.0", "redis==6.4.0", "django-prometheus==2.4.1", "types-requests"]
 name = "web"
 requires-python = ">= 3.11"
 version = "0.1.0"
@@ -39,7 +39,7 @@ redis = { version = "5.0.3.*", channel = "anaconda" }
 huey = "2.5.3.*"
 django = "5.2.4.*"
 django-browser-reload = "1.18.0.*"
-django-stubs = "5.2.2.*"
+django-stubs = ">=6.0.5,<7"
 django-widget-tweaks = "1.4.5.*"
 psycopg2 = "2.9.10.*"
 gunicorn = "23.0.0.*"
@@ -51,9 +51,16 @@ polars = ">=1.38.1,<2"
 pylint = ">=4.0.5,<5"
 pyarrow = ">=21.0.0,<22"
 mdanalysis = ">=2.10.0,<3"
+pyrefly = ">=1.0.0,<2"
+types-requests = ">=2.33.0.20260518,<3"
 
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
 
 [tool.django-stubs]
 django_settings_module = "ligand_service.settings"
+
+[tool.pyrefly]
+preset = "default"
+search_path = ["."]
+project_includes = ["**/*.py*"]

@@ -5,8 +5,6 @@ import logging
 import functools
 import shutil
 import pandas as pd
-import xmltodict
-import re
 
 from huey import crontab
 from huey.contrib.djhuey import periodic_task, task

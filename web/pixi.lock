@@ -58,8 +58,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/dill-0.4.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-5.2.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-browser-reload-1.18.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.2-pyhe01879c_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-5.2.2-pyhe01879c_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-6.0.5-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.5-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-widget-tweaks-1.4.5-py_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/entrez-direct-24.0-he881be0_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/expat-2.7.4-hecca717_0.conda
@@ -230,6 +230,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyedr-0.8.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pylint-4.0.5-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.2-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pyrefly-1.0.0-h2b88eb6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.11-h9e4cc4f_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhe01879c_2.conda
@@ -266,6 +267,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomlkit-0.14.0-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tqdm-4.67.3-pyh8f84b5b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/types-pyyaml-6.0.12.20250915-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/types-requests-2.33.0.20260518-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.15.0-h396c80c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typing_extensions-4.15.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
@@ -959,26 +961,26 @@ packages:
   requires_dist:
   - django>=4.2,<6.0
   - prometheus-client>=0.7
-- conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.2-pyhe01879c_0.conda
-  sha256: 98486160bcea049816a61d77f9177edbdc05f6fa6ce7d9d9d61cb091f6b8922b
-  md5: 1775ce675a2e45e21c5a610d0da4dde7
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-6.0.5-pyhcf101f3_0.conda
+  sha256: 950adbd8859595f4661daff50d8304cbb58b491f822e28f86c7686c9e7414dcc
+  md5: 00816e2f7dc712b456c2b11ad20a5bdb
   depends:
   - python >=3.10
   - django
-  - django-stubs-ext ==5.2.2
+  - django-stubs-ext >=6.0.5
   - tomli
-  - typing_extensions >=4.0
+  - typing_extensions >=4.11.0
   - types-pyyaml
   - python
   license: MIT
   license_family: MIT
   purls:
   - pkg:pypi/django-stubs?source=hash-mapping
-  size: 271012
-  timestamp: 1753212974454
-- conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-5.2.2-pyhe01879c_0.conda
-  sha256: fd4bb969128cd6d9e9270a76efd4b6e54aebeb084a2fa94c9c866c2d73ef7d08
-  md5: 1e05d40ce3d360408c9dc1519754b78e
+  size: 293265
+  timestamp: 1779838442641
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.5-pyhcf101f3_0.conda
+  sha256: b65feabbebf6aebe301fcdcafc6a2f4172716cef409e4cce66b8b4d965db3833
+  md5: dfd04036a7758b1b08dc9eecc549b6c8
   depends:
   - django
   - python >=3.10
@@ -988,8 +990,8 @@ packages:
   license_family: BSD
   purls:
   - pkg:pypi/django-stubs-ext?source=hash-mapping
-  size: 16222
-  timestamp: 1752770100596
+  size: 15703
+  timestamp: 1779823440215
 - pypi: https://files.pythonhosted.org/packages/b8/f5/f91497da51098d7a25ee7409a49d24c880e3af3664da0872dbe238a7174b/django_tailwind-4.2.0-py3-none-any.whl
   name: django-tailwind
   version: 4.2.0
@@ -3386,6 +3388,19 @@ packages:
   - pkg:pypi/pyparsing?source=hash-mapping
   size: 110893
   timestamp: 1769003998136
+- conda: https://conda.anaconda.org/conda-forge/linux-64/pyrefly-1.0.0-h2b88eb6_0.conda
+  sha256: 225d491c94a6962b92377154b33b424cb0cc30aa2fe0b433c6c110d05da7283d
+  md5: 132a1bc9d31e17d6e12d7188ca7ddfb8
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  purls: []
+  size: 10962615
+  timestamp: 1778629320799
 - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
   sha256: ba3b032fa52709ce0d9fd388f63d330a026754587a2f461117cac9ab73d8d0d8
   md5: 461219d1a5bd61342293efa2c0c90eac
@@ -3902,6 +3917,18 @@ packages:
   - pkg:pypi/types-pyyaml?source=hash-mapping
   size: 22060
   timestamp: 1762942278334
+- conda: https://conda.anaconda.org/conda-forge/noarch/types-requests-2.33.0.20260518-pyhcf101f3_0.conda
+  sha256: ce82c4c3ac7d206bab23ec202cea75e42ae0a0404482ddd12aa1c830b69db8f1
+  md5: f4670dc66afcbc5d3e0828f58ba30825
+  depends:
+  - python >=3.10
+  - urllib3 >=2
+  - python
+  license: Apache-2.0 AND MIT
+  purls:
+  - pkg:pypi/types-requests?source=hash-mapping
+  size: 28384
+  timestamp: 1779112008134
 - conda: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.15.0-h396c80c_0.conda
   sha256: 7c2df5721c742c2a47b2c8f960e718c930031663ac1174da67c1ed5999f7938c
   md5: edd329d7d3a4ab45dcf905899a7a6115

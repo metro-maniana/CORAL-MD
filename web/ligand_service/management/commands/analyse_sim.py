@@ -4,10 +4,10 @@ import shutil
 import uuid
 import webbrowser
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 from ligand_service.tasks import _start_simulation
-from ligand_service.models import get_trajectory_files, TrajectoryFiles
+from ligand_service.models import get_trajectory_files
 
 CLI_OUT_DIRECTORY = Path("cli").resolve()
 USER_UPLOADS_DIR = Path("user_uploads").resolve()

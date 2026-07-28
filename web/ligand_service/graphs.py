@@ -157,7 +157,7 @@ def hex2rgba(hexcol, a):
     return f"rgba({int(hexcol[1:3], 16)},{int(hexcol[3:5], 16)},{int(hexcol[5:7], 16)},{a})"
 
 
-def create_time_resolved_map(df: pd.DataFrame) -> str:
+def create_time_resolved_map(df: pl.DataFrame) -> str:
     df = (
         df.lazy()
         .with_columns(pl.col("int_type").cast(pl.String).replace(INTERACTIONS_RENAME))
